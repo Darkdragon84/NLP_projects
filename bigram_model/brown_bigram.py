@@ -1,3 +1,4 @@
+import random
 from math import log
 from nltk.corpus import brown
 from collections import Counter
@@ -14,7 +15,7 @@ def brown_word_iterator():
     sit = brown_sentence_iterator()
     for sent in sit:
         for word in sent:
-            yield word
+            yield word.lower()
 
 
 def brown_ngram_iterator(order):
@@ -22,30 +23,30 @@ def brown_ngram_iterator(order):
         raise ValueError("order must be at least 2")
 
     for sent in brown_sentence_iterator():
-        for idx in range(len(sent) - (order - 1)):
-            yield tuple(sent[idx:idx + order])
+        sent = [word.lower() for word in sent]
+        for ngram in sentence_ngram_iterator(sent, order):
+            yield ngram
 
 
-def calc_total_number_of_words():
-    sit = brown_sentence_iterator()
-    n_words = 0
-    for s in sit:
-        n_words += len(s)
-    return n_words
+def sentence_ngram_iterator(sentence, order):
+    for idx in range(len(sentence) - (order - 1)):
+        yield tuple(sentence[idx:idx + order])
 
 
-def make_brown_vocab():
-    wit = brown_word_iterator()
-    vocab = set()
-    for word in wit:
-        vocab.add(word)
-    return vocab
+def get_random_brown_sentence():
+    fid = random.sample(brown.fileids(), 1)[0]
+    sents = brown.sents(fid)
+    sid = random.sample(range(len(sents)), 1)[0]
+    return sents[sid]
 
 
 class BrownNgramModel(object):
 
     def __init__(self, order=2):
         self._order = order
+        self._vocab = None
+        self._vocab_size = None
+        self._corpus_size = None
         self._ngram_counters = dict()
         self._count_ngrams()
 
@@ -67,12 +68,60 @@ class BrownNgramModel(object):
 
     @property
     def vocab(self):
-        return self.unigram_counts.keys()
+        if self._vocab is None:
+            self._vocab = set(self.unigram_counts.keys())
+        return self._vocab
+
+    @property
+    def vocab_size(self):
+        if self._vocab_size is None:
+            self._vocab_size = len(self.vocab)
+        return self._vocab_size
+
+    @property
+    def corpus_size(self):
+        if self._corpus_size is None:
+            ct = 0
+            for n in self.unigram_counts.values():
+                ct += n
+            self._corpus_size = ct
+        return self._corpus_size
+
+    def word_log_prob(self, word):
+        assert isinstance(word, str)
+        word = word.lower()
+        if word not in self.vocab:
+            raise ValueError(word, ' not in vocab')
+
+        logprob = log(self.unigram_counts[word]) - log(self.corpus_size)
+        return logprob
 
     def bigram_log_prob(self, bigram):
-        assert len(bigram)==2
-        bigram = bigram if isinstance(bigram, tuple) else tuple(bigram)
+        assert len(bigram) == 2
+        bigram = tuple([word.lower() for word in bigram])  # lowercase bigram
+
+        if not set(bigram).issubset(self.vocab):
+            raise ValueError(bigram, ' not in vocab')
+
+        # use one smoothing
         logprob = log(self.get_ngram_counts(2)[bigram] + 1) - log(self.unigram_counts[bigram[0]] + self.vocab_size)
+        return logprob
+
+    def sentence_log_prob(self, sentence):
+        length = len(sentence)
+        assert length > 2
+
+        sentence = [word.lower() for word in sentence]
+        if not set(sentence).issubset(self.vocab):
+            raise ValueError(sentence, ' not in vocab')
+
+        logprob = self.word_log_prob(sentence[0])
+        # for idx in range(length - (self._order - 1)):
+        #     bigram = tuple(sentence[idx:idx + self._order])
+        for bigram in sentence_ngram_iterator(sentence, 2):
+            logprob += self.bigram_log_prob(bigram)
+
+        logprob /= length
         return logprob
 
     # def ngram_log_prob(self, ngram):
@@ -84,19 +133,19 @@ class BrownNgramModel(object):
     # @property
     # def total_nwords(self):
 
-    @property
-    def vocab_size(self):
-        return len(self.vocab)
 
     # def _count_ngrams(self, order):
     #     for sent in brown_sentence_iterator():
 
 
 def main():
-    model = BrownNgramModel()
-    uct = model.unigram_counts
-    bct = model.get_ngram_counts(2)
-    # print(ctr)
+    model = BrownNgramModel(2)
+    fids = brown.fileids()
+    sents =brown.sents(fids[0])
+
+    sent1 = sents[0]
+    print(sent1)
+    print(model.sentence_log_prob(sent1))
 
 
 if __name__ == '__main__':
