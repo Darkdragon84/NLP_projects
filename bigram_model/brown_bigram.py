@@ -42,8 +42,9 @@ def get_random_brown_sentence():
 
 class BrownNgramModel(object):
 
-    def __init__(self, order=2):
+    def __init__(self, order=2, smoothing=1):
         self._order = order
+        self._smoothing = smoothing
         self._vocab = None
         self._vocab_size = None
         self._corpus_size = None
@@ -104,8 +105,9 @@ class BrownNgramModel(object):
         if not set(bigram).issubset(self.vocab):
             raise ValueError(bigram, ' not in vocab')
 
-        # use one smoothing
-        logprob = log(self.get_ngram_counts(2)[bigram] + 1) - log(self.unigram_counts[bigram[0]] + self.vocab_size)
+        # use smoothing
+        logprob = log(self.get_ngram_counts(2)[bigram] + self._smoothing) - \
+                  log(self.unigram_counts[bigram[0]] + self.vocab_size)
         return logprob
 
     def sentence_log_prob(self, sentence):
