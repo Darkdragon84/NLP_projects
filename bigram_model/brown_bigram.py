@@ -47,10 +47,11 @@ class BrownNgramModel(object):
         self._vocab = None
         self._vocab_size = None
         self._corpus_size = None
-        self._ngram_counters = dict()
+        self._ngram_counters = None
         self._count_ngrams()
 
     def _count_ngrams(self):
+        self._ngram_counters = dict()
         self._ngram_counters[1] = Counter(brown_word_iterator())
         for n in range(1, self._order):
             self._ngram_counters[n+1] = Counter(brown_ngram_iterator(n+1))
@@ -124,28 +125,13 @@ class BrownNgramModel(object):
         logprob /= length
         return logprob
 
-    # def ngram_log_prob(self, ngram):
-    #     order = len(ngram)
-    #     ngram = ngram if isinstance(ngram, tuple) else tuple(ngram)
-    #
-    #     logprob = log(self.get_ngram_counts(order)[ngram])
-
-    # @property
-    # def total_nwords(self):
-
-
-    # def _count_ngrams(self, order):
-    #     for sent in brown_sentence_iterator():
-
 
 def main():
     model = BrownNgramModel(2)
-    fids = brown.fileids()
-    sents =brown.sents(fids[0])
 
-    sent1 = sents[0]
-    print(sent1)
-    print(model.sentence_log_prob(sent1))
+    sent = get_random_brown_sentence()
+    print(sent)
+    print(model.sentence_log_prob(sent))
 
 
 if __name__ == '__main__':
