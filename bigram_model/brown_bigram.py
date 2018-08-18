@@ -47,6 +47,8 @@ class BrownNgramModel(object):
         self._smoothing = smoothing
         self._vocab = None
         self._vocab_size = None
+        self._vocab_as_list = None
+
         self._corpus_size = None
         self._ngram_counters = None
         self._count_ngrams()
@@ -79,6 +81,12 @@ class BrownNgramModel(object):
         if self._vocab_size is None:
             self._vocab_size = len(self.vocab)
         return self._vocab_size
+
+    @property
+    def vocab_as_list(self):
+        if self._vocab_as_list is None:
+            self._vocab_as_list = list(self.vocab)
+        return self._vocab_as_list
 
     @property
     def corpus_size(self):
@@ -127,13 +135,27 @@ class BrownNgramModel(object):
         logprob /= length
         return logprob
 
+    def get_random_sentence_from_vocab(self, n_words):
+        sentence = [random.choice(self.vocab_as_list) for _ in range(n_words)] + ['.']
+        return sentence
+
 
 def main():
     model = BrownNgramModel(2)
 
-    sent = get_random_brown_sentence()
-    print(sent)
-    print(model.sentence_log_prob(sent))
+    while True:
+        sent1 = get_random_brown_sentence()
+        sent2 = model.get_random_sentence_from_vocab(random.choice(range(5, 20)))
+
+        logprob1 = model.sentence_log_prob(sent1)
+        logprob2 = model.sentence_log_prob(sent2)
+
+        print("{}: {}".format(logprob1, " ".join(sent1)))
+        print("{}: {}".format(logprob2, " ".join(sent2)))
+
+        choice = input("continue [Y/n]:")
+        if choice == 'n':
+            break
 
 
 if __name__ == '__main__':
