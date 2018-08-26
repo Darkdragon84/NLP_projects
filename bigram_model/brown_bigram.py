@@ -3,27 +3,32 @@ from math import log
 from nltk.corpus import brown
 from collections import Counter
 
+from tools.dictionary import Dictionary
 
-def brown_sentence_iterator():
+
+def brown_sentence_iterator(dictionary=None):
     for doc_id in brown.fileids():
         sentences = brown.sents(doc_id)
         for sent in sentences:
+            sent = [word.lower() for word in sent]
+            if dictionary is not None:
+                dictionary.add_tokens(sent)
+                sent = [dictionary[word] for word in sent]
             yield sent
 
 
-def brown_word_iterator():
-    sit = brown_sentence_iterator()
+def brown_word_iterator(dictionary=None):
+    sit = brown_sentence_iterator(dictionary)
     for sent in sit:
         for word in sent:
-            yield word.lower()
+            yield word
 
 
-def brown_ngram_iterator(order):
+def brown_ngram_iterator(order, dictionary=None):
     if order < 2:
         raise ValueError("order must be at least 2")
 
-    for sent in brown_sentence_iterator():
-        sent = [word.lower() for word in sent]
+    for sent in brown_sentence_iterator(dictionary):
         for ngram in sentence_ngram_iterator(sent, order):
             yield ngram
 
@@ -47,7 +52,7 @@ class BrownNgramModel(object):
         if smoothing <= 0:
             raise ValueError("smoothing must be > 0")
 
-        self._vocab = None
+        self._vocab = Dictionary()
         self._vocab_size = None
         self._vocab_as_list = None
 
@@ -57,9 +62,9 @@ class BrownNgramModel(object):
 
     def _count_ngrams(self):
         self._ngram_counters = dict()
-        self._ngram_counters[1] = Counter(brown_word_iterator())
+        self._ngram_counters[1] = Counter(brown_word_iterator(self._vocab))
         for n in range(2, self._order + 1):
-            self._ngram_counters[n] = Counter(brown_ngram_iterator(n))
+            self._ngram_counters[n] = Counter(brown_ngram_iterator(n, self._vocab))
 
     @property
     def order(self):
@@ -74,21 +79,22 @@ class BrownNgramModel(object):
 
     @property
     def vocab(self):
-        if self._vocab is None:
-            self._vocab = set(self.unigram_counts.keys())
+        # if self._vocab is None:
+        #     # self._vocab = set(self.unigram_counts.keys())
+        #     self._vocab = Dictionary.from_token_iterable(self.unigram_counts.keys())
         return self._vocab
 
-    @property
-    def vocab_size(self):
-        if self._vocab_size is None:
-            self._vocab_size = len(self.vocab)
-        return self._vocab_size
+    # @property
+    # def vocab_size(self):
+    #     if self._vocab_size is None:
+    #         self._vocab_size = len(self.vocab)
+    #     return self._vocab_size
 
-    @property
-    def vocab_as_list(self):
-        if self._vocab_as_list is None:
-            self._vocab_as_list = list(self.vocab)
-        return self._vocab_as_list
+    # @property
+    # def vocab_as_list(self):
+    #     if self._vocab_as_list is None:
+    #         self._vocab_as_list = list(self.vocab)
+    #     return self._vocab_as_list
 
     @property
     def corpus_size(self):
@@ -112,20 +118,23 @@ class BrownNgramModel(object):
         assert len(bigram) == 2
         bigram = tuple([word.lower() for word in bigram])  # lowercase bigram
 
-        if not set(bigram).issubset(self.vocab):
+        if bigram not in self.vocab:
             raise ValueError(bigram, ' not in vocab')
+
+        # translate bigram into token_ids
+        bigram = tuple(self.vocab[word] for word in bigram)
 
         # use smoothing
         logprob = log(self.get_ngram_counts(2)[bigram] + self._smoothing) - \
                   log(self.unigram_counts[bigram[0]] + self._smoothing * self.vocab_size)
         return logprob
 
-    def sentence_log_prob(self, sentence, smoothing=1):
+    def sentence_log_prob(self, sentence, smoothing=1.):
         length = len(sentence)
         assert length > 2
 
         sentence = [word.lower() for word in sentence]
-        if not set(sentence).issubset(self.vocab):
+        if sentence not in self.vocab:
             raise ValueError(sentence, ' not in vocab')
 
         logprob = self.word_log_prob(sentence[0])
@@ -138,19 +147,20 @@ class BrownNgramModel(object):
         return logprob
 
     def get_random_sentence_from_vocab(self, n_words):
-        sentence = [random.choice(self.vocab_as_list) for _ in range(n_words)] + ['.']
+        sentence = [random.choice(self._vocab.tokens) for _ in range(n_words)] + ['.']
         return sentence
 
 
 def main():
     model = BrownNgramModel(2)
+    smoothing = 0.5
 
     while True:
         sent1 = get_random_brown_sentence()
         sent2 = model.get_random_sentence_from_vocab(random.choice(range(5, 20)))
 
-        logprob1 = model.sentence_log_prob(sent1)
-        logprob2 = model.sentence_log_prob(sent2)
+        logprob1 = model.sentence_log_prob(sent1, smoothing=smoothing)
+        logprob2 = model.sentence_log_prob(sent2, smoothing=smoothing)
 
         print("{}: {}".format(logprob1, " ".join(sent1)))
         print("{}: {}".format(logprob2, " ".join(sent2)))

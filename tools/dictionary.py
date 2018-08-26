@@ -5,22 +5,33 @@ class Dictionary(object):
         self._tokens = list()
         self._token_to_id = dict()
 
-    def __contains__(self, token):
-        return token in self._token_to_id
+    def __contains__(self, item):
+        if isinstance(item, str):
+            return item in self._token_to_id
+        elif isinstance(item, (list, tuple, set)):
+            return all(element in self for element in item)
 
     def __len__(self):
         return len(self._tokens)
 
-    def __getitem__(self, token_id):
+    def __getitem__(self, token):
+        return self._token_to_id[token]
+
+    @property
+    def tokens(self):
+        return self._tokens
+
+    @property
+    def token_to_id(self):
+        return self._token_to_id
+
+    def token_from_id(self, token_id):
         if token_id >= len(self):
             raise KeyError("id {} not in Dictionary, max. id: {}".format(token_id, len(self) - 1))
         return self._tokens[token_id]
 
-    def token_id(self, token):
-        return self._token_to_id[token]
-
     def add_tokens(self, tokens):
-        if not isinstance(tokens, (list, set)):
+        if not isinstance(tokens, (list, set, tuple)):
             raise ValueError("tokens must be either a list or set of items")
 
         new_id = len(self._tokens)
