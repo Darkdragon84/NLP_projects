@@ -44,6 +44,9 @@ class BrownNgramModel(object):
 
     def __init__(self, order=2, smoothing=1):
         self._order = order
+        if smoothing <= 0:
+            raise ValueError("smoothing must be > 0")
+
         self._smoothing = smoothing
         self._vocab = None
         self._vocab_size = None
@@ -56,8 +59,8 @@ class BrownNgramModel(object):
     def _count_ngrams(self):
         self._ngram_counters = dict()
         self._ngram_counters[1] = Counter(brown_word_iterator())
-        for n in range(1, self._order):
-            self._ngram_counters[n+1] = Counter(brown_ngram_iterator(n+1))
+        for n in range(2, self._order + 1):
+            self._ngram_counters[n] = Counter(brown_ngram_iterator(n))
 
     @property
     def order(self):
@@ -115,7 +118,7 @@ class BrownNgramModel(object):
 
         # use smoothing
         logprob = log(self.get_ngram_counts(2)[bigram] + self._smoothing) - \
-                  log(self.unigram_counts[bigram[0]] + self.vocab_size)
+                  log(self.unigram_counts[bigram[0]] + self._smoothing * self.vocab_size)
         return logprob
 
     def sentence_log_prob(self, sentence):
