@@ -42,12 +42,11 @@ def get_random_brown_sentence():
 
 class BrownNgramModel(object):
 
-    def __init__(self, order=2, smoothing=1):
+    def __init__(self, order=2):
         self._order = order
         if smoothing <= 0:
             raise ValueError("smoothing must be > 0")
 
-        self._smoothing = smoothing
         self._vocab = None
         self._vocab_size = None
         self._vocab_as_list = None
@@ -121,7 +120,7 @@ class BrownNgramModel(object):
                   log(self.unigram_counts[bigram[0]] + self._smoothing * self.vocab_size)
         return logprob
 
-    def sentence_log_prob(self, sentence):
+    def sentence_log_prob(self, sentence, smoothing=1):
         length = len(sentence)
         assert length > 2
 
