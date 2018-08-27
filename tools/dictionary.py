@@ -55,7 +55,7 @@ class Dictionary(object):
         self._token_to_id = {i: token for i, token in enumerate(self._tokens)}
 
     @classmethod
-    def from_token_iterable(cls, word_iterable):
+    def from_tokens(cls, word_iterable):
         dic = cls()
         dic.add_tokens(word_iterable)
         return dic
