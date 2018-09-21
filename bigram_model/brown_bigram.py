@@ -5,32 +5,52 @@ from collections import Counter
 
 from tools.dictionary import Dictionary
 
+START = 'START_TOKEN'
+END = 'END_TOKEN'
 
-def brown_sentence_iterator(dictionary=None):
+TEST_SENTENCE = "They are trying to demonstrate some different ways of teaching and learning .".split()
+
+
+def brown_sentence_iterator(dictionary=None, start_token=None, end_token=None):
+    if dictionary is not None:
+        delimiters = []
+        if start_token:
+            delimiters.append(start_token)
+        if end_token:
+            delimiters.append(end_token)
+        dictionary.add_tokens(delimiters)
+
     for doc_id in brown.fileids():
         sentences = brown.sents(doc_id)
         for sent in sentences:
             sent = [word.lower() for word in sent]
+            sent = expand_tokenized_sentence(sent, start_token, end_token)
             if dictionary is not None:
                 dictionary.add_tokens(sent)
                 sent = [dictionary[word] for word in sent]
             yield sent
 
 
-def brown_word_iterator(dictionary=None):
-    sit = brown_sentence_iterator(dictionary)
-    for sent in sit:
-        for word in sent:
-            yield word
-
-
-def brown_ngram_iterator(order, dictionary=None):
-    if order < 2:
-        raise ValueError("order must be at least 2")
-
-    for sent in brown_sentence_iterator(dictionary):
-        for ngram in sentence_ngram_iterator(sent, order):
+def brown_ngram_iterator(order, dictionary=None, start_token=None, end_token=None):
+    assert order > 0
+    sentence_iterator = make_sentence_iterator(order)
+    for sent in brown_sentence_iterator(dictionary, start_token, end_token):
+        for ngram in sentence_iterator(sent):
             yield ngram
+
+
+def make_sentence_iterator(ngram_order):
+    if ngram_order == 1:
+        return sentence_word_iterator
+
+    def sit(sentence):
+        return sentence_ngram_iterator(sentence, ngram_order)
+    return sit
+
+
+def sentence_word_iterator(sentence):
+    for word in sentence:
+        yield word
 
 
 def sentence_ngram_iterator(sentence, order):
@@ -45,10 +65,20 @@ def get_random_brown_sentence():
     return sents[sid]
 
 
+def expand_tokenized_sentence(tokens, start_token=None, end_token=None):
+    if start_token:
+        tokens = [start_token] + tokens
+    if end_token:
+        tokens = tokens + [end_token]
+    return tokens
+
+
 class BrownNgramModel(object):
 
-    def __init__(self, order=2):
+    def __init__(self, order=2, start_token=None, end_token=None):
         self._order = order
+        self._start_token = start_token
+        self._end_token = end_token
 
         self._vocab = Dictionary()
         self._vocab_size = None
@@ -60,9 +90,9 @@ class BrownNgramModel(object):
 
     def _count_ngrams(self):
         self._ngram_counters = dict()
-        self._ngram_counters[1] = Counter(brown_word_iterator(self._vocab))
-        for n in range(2, self._order + 1):
-            self._ngram_counters[n] = Counter(brown_ngram_iterator(n, self._vocab))
+        for n in range(self._order):
+            self._ngram_counters[n + 1] = Counter(brown_ngram_iterator(n + 1, self._vocab,
+                                                                       self._start_token, self._end_token))
 
     @property
     def order(self):
@@ -82,15 +112,16 @@ class BrownNgramModel(object):
     @property
     def corpus_size(self):
         if self._corpus_size is None:
-            ct = 0
-            for n in self.unigram_counts.values():
-                ct += n
-            self._corpus_size = ct
+            total_count = 0
+            for token, count in self.unigram_counts.items():
+                if token not in {self._start_token, self._end_token}:
+                    total_count += count
+            self._corpus_size = total_count
         return self._corpus_size
 
     def word_prob(self, word):
         assert isinstance(word, str)
-        word = word.lower()
+        # word = word.lower()
         if word not in self.vocab:
             raise ValueError(word, ' not in vocab')
 
@@ -99,7 +130,7 @@ class BrownNgramModel(object):
 
     def bigram_prob(self, bigram, smoothing=1.):
         assert len(bigram) == 2
-        bigram = tuple([word.lower() for word in bigram])  # lowercase bigram
+        # bigram = tuple([word.lower() for word in bigram])  # lowercase bigram
 
         if bigram not in self.vocab:
             raise ValueError(bigram, ' not in vocab')
@@ -113,17 +144,18 @@ class BrownNgramModel(object):
         return prob
 
     def sentence_log_prob(self, sentence, smoothing=1.):
+
+        # TODO how to properly measure the length in presence of start and end tokens?
         length = len(sentence)
         assert length > 2
 
         sentence = [word.lower() for word in sentence]
+        sentence = expand_tokenized_sentence(sentence, self._start_token, self._end_token)
         if sentence not in self.vocab:
             raise ValueError(sentence, ' not in vocab')
 
-
+        # logprob = 0 if self._start_token else log(self.word_prob(sentence[0]))
         logprob = log(self.word_prob(sentence[0]))
-        # for idx in range(length - (self._order - 1)):
-        #     bigram = tuple(sentence[idx:idx + self._order])
         for bigram in sentence_ngram_iterator(sentence, 2):
             prob = self.bigram_prob(bigram, smoothing)
             # if smoothing = 0, some ngrams can have 0 probability if they never appeared in the corpus. In that case
@@ -142,7 +174,11 @@ class BrownNgramModel(object):
 
 def main():
     model = BrownNgramModel(2)
+    # model = BrownNgramModel(2, START, END)
     smoothing = 0.5
+
+    logprob = model.sentence_log_prob(TEST_SENTENCE, smoothing=smoothing)
+    print("{}: {}".format(logprob, " ".join(TEST_SENTENCE)))
 
     while True:
         sent1 = get_random_brown_sentence()
