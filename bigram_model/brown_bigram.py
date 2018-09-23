@@ -146,17 +146,20 @@ class BrownNgramModel(object):
     def sentence_log_prob(self, sentence, smoothing=1.):
 
         # TODO how to properly measure the length in presence of start and end tokens?
-        length = len(sentence)
-        assert length > 2
+        assert len(sentence) > 2
 
         sentence = [word.lower() for word in sentence]
         sentence = expand_tokenized_sentence(sentence, self._start_token, self._end_token)
         if sentence not in self.vocab:
             raise ValueError(sentence, ' not in vocab')
 
-        # logprob = 0 if self._start_token else log(self.word_prob(sentence[0]))
-        logprob = log(self.word_prob(sentence[0]))
+        # we don't care about the overall probability for a sentence to start with a particular word,
+        # especially if we are using a start token
+        logprob = 0
+        ct = 0
         for bigram in sentence_ngram_iterator(sentence, 2):
+            ct += 1
+            print(ct, bigram)
             prob = self.bigram_prob(bigram, smoothing)
             # if smoothing = 0, some ngrams can have 0 probability if they never appeared in the corpus. In that case
             # the sentence has 0 probability -> return logprob = -inf
@@ -164,7 +167,7 @@ class BrownNgramModel(object):
                 return -float('inf')
             logprob += log(prob)
 
-        logprob /= length
+        logprob /= ct
         return logprob
 
     def get_random_sentence_from_vocab(self, n_words):
@@ -173,8 +176,8 @@ class BrownNgramModel(object):
 
 
 def main():
-    model = BrownNgramModel(2)
-    # model = BrownNgramModel(2, START, END)
+    # model = BrownNgramModel(2)
+    model = BrownNgramModel(2, START, END)
     smoothing = 0.5
 
     logprob = model.sentence_log_prob(TEST_SENTENCE, smoothing=smoothing)
