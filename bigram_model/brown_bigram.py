@@ -178,7 +178,7 @@ class BrownNgramModel(object):
 def main():
     # model = BrownNgramModel(2)
     model = BrownNgramModel(2, START, END)
-    smoothing = 0.5
+    smoothing = 0.1
 
     logprob = model.sentence_log_prob(TEST_SENTENCE, smoothing=smoothing)
     print("{}: {}".format(logprob, " ".join(TEST_SENTENCE)))
