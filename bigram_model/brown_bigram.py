@@ -49,8 +49,6 @@ class BrownNgramModel(object):
 
     def __init__(self, order=2):
         self._order = order
-        if smoothing <= 0:
-            raise ValueError("smoothing must be > 0")
 
         self._vocab = Dictionary()
         self._vocab_size = None
@@ -105,16 +103,16 @@ class BrownNgramModel(object):
             self._corpus_size = ct
         return self._corpus_size
 
-    def word_log_prob(self, word):
+    def word_prob(self, word):
         assert isinstance(word, str)
         word = word.lower()
         if word not in self.vocab:
             raise ValueError(word, ' not in vocab')
 
-        logprob = log(self.unigram_counts[word]) - log(self.corpus_size)
-        return logprob
+        prob = self.unigram_counts[self._vocab[word]] / self.corpus_size
+        return prob
 
-    def bigram_log_prob(self, bigram):
+    def bigram_prob(self, bigram, smoothing=1.):
         assert len(bigram) == 2
         bigram = tuple([word.lower() for word in bigram])  # lowercase bigram
 
@@ -125,23 +123,26 @@ class BrownNgramModel(object):
         bigram = tuple(self.vocab[word] for word in bigram)
 
         # use smoothing
-        logprob = log(self.get_ngram_counts(2)[bigram] + self._smoothing) - \
-                  log(self.unigram_counts[bigram[0]] + self._smoothing * self.vocab_size)
-        return logprob
+        prob = (self.get_ngram_counts(2)[bigram] + smoothing) / \
+               (self.unigram_counts[bigram[0]] + smoothing * len(self.vocab))
+        return prob
 
     def sentence_log_prob(self, sentence, smoothing=1.):
         length = len(sentence)
-        assert length > 2
+        if length < 2:
+            raise ValueError("sentence must be at least of length 2")
 
         sentence = [word.lower() for word in sentence]
         if sentence not in self.vocab:
             raise ValueError(sentence, ' not in vocab')
 
-        logprob = self.word_log_prob(sentence[0])
-        # for idx in range(length - (self._order - 1)):
-        #     bigram = tuple(sentence[idx:idx + self._order])
+        # TODO implement ngrams larger than bigrams
+        logprob = log(self.word_prob(sentence[0]))  # unigrams are guaranteed to have nonzero probability
         for bigram in sentence_ngram_iterator(sentence, 2):
-            logprob += self.bigram_log_prob(bigram)
+            prob = self.bigram_prob(bigram, smoothing)
+            if prob == 0:  # if smoothing = 0, bigrams can have 0 probability, return inf. sentence log prob then.
+                return -float('inf')
+            logprob += log(prob)
 
         logprob /= length
         return logprob
