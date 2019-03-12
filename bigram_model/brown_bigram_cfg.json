@@ -1,0 +1,5 @@
+{
+  "dictionary path": "path/to/dictionary",
+  "smoothing": 0.1,
+  "test sentence": null
+}

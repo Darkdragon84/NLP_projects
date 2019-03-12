@@ -1,4 +1,6 @@
 import random
+import simplejson
+from argparse import ArgumentParser
 from math import log
 from nltk.corpus import brown
 from collections import Counter
@@ -12,13 +14,13 @@ TEST_SENTENCE = "They are trying to demonstrate some different ways of teaching 
 
 
 def brown_sentence_iterator(dictionary=None, start_token=None, end_token=None):
-    if dictionary is not None:
-        delimiters = []
-        if start_token:
-            delimiters.append(start_token)
-        if end_token:
-            delimiters.append(end_token)
-        dictionary.add_tokens(delimiters)
+    # if dictionary is not None:
+    #     delimiters = []
+    #     if start_token:
+    #         delimiters.append(start_token)
+    #     if end_token:
+    #         delimiters.append(end_token)
+    #     dictionary.add_tokens(delimiters)
 
     for doc_id in brown.fileids():
         sentences = brown.sents(doc_id)
@@ -26,7 +28,7 @@ def brown_sentence_iterator(dictionary=None, start_token=None, end_token=None):
             sent = [word.lower() for word in sent]
             sent = expand_tokenized_sentence(sent, start_token, end_token)
             if dictionary is not None:
-                dictionary.add_tokens(sent)
+                # dictionary.add_tokens(sent)
                 sent = [dictionary[word] for word in sent]
             yield sent
 
@@ -43,9 +45,9 @@ def make_sentence_iterator(ngram_order):
     if ngram_order == 1:
         return sentence_word_iterator
 
-    def sit(sentence):
+    def sent_it(sentence):
         return sentence_ngram_iterator(sentence, ngram_order)
-    return sit
+    return sent_it
 
 
 def sentence_word_iterator(sentence):
@@ -176,9 +178,24 @@ class BrownNgramModel(object):
 
 
 def main():
-    # model = BrownNgramModel(2)
+    arg_parser = ArgumentParser("")
+    arg_parser.add_argument("--config-file-loc", required=True,
+                            type=str,
+                            help="absolute path to a JSON file specifying values of this script's config params",
+                            metavar="CONFIG_FILE_LOC")
+
+    command_line_args = arg_parser.parse_args()
+    with open(command_line_args.config_file_loc, "r") as file:
+        dict_config_params = simplejson.load(file)
+
+    smoothing = dict_config_params["smoothing"]
+    dictionary_path = dict_config_params["dictionary path"]
+    test_sentence = dict_config_params["test sentence"]
+
+    if test_sentence is None:
+        test_sentence = TEST_SENTENCE
+
     model = BrownNgramModel(2, START, END)
-    smoothing = 0.1
 
     logprob = model.sentence_log_prob(TEST_SENTENCE, smoothing=smoothing)
     print("{}: {}".format(logprob, " ".join(TEST_SENTENCE)))

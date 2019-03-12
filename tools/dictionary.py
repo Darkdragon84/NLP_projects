@@ -1,3 +1,7 @@
+from collections import Counter
+from operator import itemgetter
+
+NONE_TOKEN = "NONE"
 
 
 class Dictionary(object):
@@ -15,7 +19,10 @@ class Dictionary(object):
         return len(self._tokens)
 
     def __getitem__(self, token):
-        return self._token_to_id[token]
+        return self._token_to_id.get(token, -1)
+
+    def save(self, filepath):
+        pass
 
     @property
     def tokens(self):
@@ -26,9 +33,7 @@ class Dictionary(object):
         return self._token_to_id
 
     def token_from_id(self, token_id):
-        if token_id >= len(self):
-            raise KeyError("id {} not in Dictionary, max. id: {}".format(token_id, len(self) - 1))
-        return self._tokens[token_id]
+        return NONE_TOKEN if token_id >= len(self) else self._tokens[token_id]
 
     def add_tokens(self, tokens):
         if not isinstance(tokens, (list, set, tuple)):
@@ -59,4 +64,21 @@ class Dictionary(object):
         dic = cls()
         dic.add_tokens(word_iterable)
         return dic
+
+    @classmethod
+    def from_corpus(cls, corpus, max_vocab_size=None):
+        """
+        :param corpus:          [iterable] that yields the corpus token by token in a flat hierarchy
+        :param max_vocab_size:  [int] max amount of tokens in dictionary (only tokens with highest count retained)
+        :return:
+        """
+        token_counter = Counter(corpus)
+        if max_vocab_size is not None:
+            tokens = [token for token, _ in sorted(token_counter, key=itemgetter(1), reverse=True)[:max_vocab_size]]
+        else:
+            tokens = token_counter.keys()
+
+        dictionary = cls()
+        dictionary.add_tokens(tokens)
+        return dictionary
 
