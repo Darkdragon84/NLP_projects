@@ -1,3 +1,4 @@
+import os
 import random
 import simplejson
 from argparse import ArgumentParser
@@ -194,6 +195,9 @@ def main():
 
     if test_sentence is None:
         test_sentence = TEST_SENTENCE
+
+    if not os.path.isfile(dictionary_path):
+        dic = Dictionary.from_corpus(brown_ngram_iterator(1, start_token=START, end_token=END))
 
     model = BrownNgramModel(2, START, END)
 

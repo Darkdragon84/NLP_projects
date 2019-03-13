@@ -1,7 +1,10 @@
+import pickle
 from collections import Counter
 from operator import itemgetter
+from typing import Iterable
 
 NONE_TOKEN = "NONE"
+NONE_TOKEN_ID = -1
 
 
 class Dictionary(object):
@@ -12,17 +15,26 @@ class Dictionary(object):
     def __contains__(self, item):
         if isinstance(item, str):
             return item in self._token_to_id
-        elif isinstance(item, (list, tuple, set)):
+        elif isinstance(item, Iterable):
             return all(element in self for element in item)
 
     def __len__(self):
         return len(self._tokens)
 
     def __getitem__(self, token):
-        return self._token_to_id.get(token, -1)
+        return self._token_to_id.get(token, NONE_TOKEN_ID)
 
     def save(self, filepath):
-        pass
+        with open(filepath, "wb") as file:
+            pickle.dump(self, file)
+
+    @classmethod
+    def load(cls, filepath):
+        with open(filepath, "rb") as file:
+            dic = pickle.load(file)
+        if not isinstance(dic, cls):
+            raise RuntimeError("{} is not a Dictionary object")
+        return dic
 
     @property
     def tokens(self):
@@ -33,10 +45,10 @@ class Dictionary(object):
         return self._token_to_id
 
     def token_from_id(self, token_id):
-        return NONE_TOKEN if token_id >= len(self) else self._tokens[token_id]
+        return NONE_TOKEN if token_id == NONE_TOKEN_ID or token_id >= len(self) else self._tokens[token_id]
 
     def add_tokens(self, tokens):
-        if not isinstance(tokens, (list, set, tuple)):
+        if not isinstance(tokens, Iterable):
             raise ValueError("tokens must be either a list or set of items")
 
         new_id = len(self._tokens)
@@ -74,11 +86,10 @@ class Dictionary(object):
         """
         token_counter = Counter(corpus)
         if max_vocab_size is not None:
-            tokens = [token for token, _ in sorted(token_counter, key=itemgetter(1), reverse=True)[:max_vocab_size]]
+            tokens = [token for token, _ in sorted(token_counter.items(), key=itemgetter(1), reverse=True)[:max_vocab_size]]
         else:
-            tokens = token_counter.keys()
+            tokens = list(token_counter.keys())
 
-        dictionary = cls()
-        dictionary.add_tokens(tokens)
+        dictionary = cls.from_tokens(tokens)
         return dictionary
 
