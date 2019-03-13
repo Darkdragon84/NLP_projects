@@ -6,7 +6,7 @@ from math import log
 from nltk.corpus import brown
 from collections import Counter
 
-from tools.dictionary import Dictionary
+from tools.dictionary import Dictionary, NONE_TOKEN_ID
 
 START = 'START_TOKEN'
 END = 'END_TOKEN'
@@ -15,13 +15,6 @@ TEST_SENTENCE = "They are trying to demonstrate some different ways of teaching 
 
 
 def brown_sentence_iterator(dictionary=None, start_token=None, end_token=None):
-    # if dictionary is not None:
-    #     delimiters = []
-    #     if start_token:
-    #         delimiters.append(start_token)
-    #     if end_token:
-    #         delimiters.append(end_token)
-    #     dictionary.add_tokens(delimiters)
 
     for doc_id in brown.fileids():
         sentences = brown.sents(doc_id)
@@ -29,8 +22,9 @@ def brown_sentence_iterator(dictionary=None, start_token=None, end_token=None):
             sent = [word.lower() for word in sent]
             sent = expand_tokenized_sentence(sent, start_token, end_token)
             if dictionary is not None:
-                # dictionary.add_tokens(sent)
                 sent = [dictionary[word] for word in sent]
+                # if NONE_TOKEN_ID in sent:
+                #     print([dictionary.token_from_id(idx) for idx in sent])
             yield sent
 
 
@@ -78,12 +72,12 @@ def expand_tokenized_sentence(tokens, start_token=None, end_token=None):
 
 class BrownNgramModel(object):
 
-    def __init__(self, order=2, start_token=None, end_token=None):
+    def __init__(self, vocab, order=2, start_token=None, end_token=None):
         self._order = order
         self._start_token = start_token
         self._end_token = end_token
 
-        self._vocab = Dictionary()
+        self._vocab = vocab
         self._vocab_size = None
         self._vocab_as_list = None
 
@@ -135,9 +129,6 @@ class BrownNgramModel(object):
         assert len(bigram) == 2
         # bigram = tuple([word.lower() for word in bigram])  # lowercase bigram
 
-        if bigram not in self.vocab:
-            raise ValueError(bigram, ' not in vocab')
-
         # translate bigram into token_ids
         bigram = tuple(self.vocab[word] for word in bigram)
 
@@ -153,8 +144,6 @@ class BrownNgramModel(object):
 
         sentence = [word.lower() for word in sentence]
         sentence = expand_tokenized_sentence(sentence, self._start_token, self._end_token)
-        if sentence not in self.vocab:
-            raise ValueError(sentence, ' not in vocab')
 
         # we don't care about the overall probability for a sentence to start with a particular word,
         # especially if we are using a start token
@@ -162,7 +151,7 @@ class BrownNgramModel(object):
         ct = 0
         for bigram in sentence_ngram_iterator(sentence, 2):
             ct += 1
-            print(ct, bigram)
+            # print(ct, bigram)
             prob = self.bigram_prob(bigram, smoothing)
             # if smoothing = 0, some ngrams can have 0 probability if they never appeared in the corpus. In that case
             # the sentence has 0 probability -> return logprob = -inf
@@ -176,6 +165,14 @@ class BrownNgramModel(object):
     def get_random_sentence_from_vocab(self, n_words):
         sentence = [random.choice(self._vocab.tokens) for _ in range(n_words)] + ['.']
         return sentence
+
+
+def make_and_save_dictionary(dictionary_path, max_vocab_size):
+    dic = Dictionary.from_corpus(brown_ngram_iterator(1, start_token=START, end_token=END),
+                                 max_vocab_size=max_vocab_size)
+    dic.save(dictionary_path)
+    print("created and saved Dictionary to {}".format(dictionary_path))
+    return dic
 
 
 def main():
@@ -192,17 +189,26 @@ def main():
     smoothing = dict_config_params["smoothing"]
     dictionary_path = dict_config_params["dictionary path"]
     test_sentence = dict_config_params["test sentence"]
+    max_vocab_size = dict_config_params["max vocab size"]
 
     if test_sentence is None:
         test_sentence = TEST_SENTENCE
 
     if not os.path.isfile(dictionary_path):
-        dic = Dictionary.from_corpus(brown_ngram_iterator(1, start_token=START, end_token=END))
+        dic = make_and_save_dictionary(dictionary_path, max_vocab_size)
+    else:
+        dic = Dictionary.load(dictionary_path)
+        print("loaded Dictionary from {}".format(dictionary_path))
 
-    model = BrownNgramModel(2, START, END)
+        if max_vocab_size and len(dic) > max_vocab_size:
+            print("Dictionary size too large: {}, should be {} max".format(len(dic), max_vocab_size))
+            dic = make_and_save_dictionary(dictionary_path, max_vocab_size)
 
-    logprob = model.sentence_log_prob(TEST_SENTENCE, smoothing=smoothing)
-    print("{}: {}".format(logprob, " ".join(TEST_SENTENCE)))
+    print("vocab size: {}".format(len(dic)))
+    model = BrownNgramModel(dic, 2, START, END)
+
+    logprob = model.sentence_log_prob(test_sentence, smoothing=smoothing)
+    print("{}: {}".format(logprob, " ".join(test_sentence)))
 
     while True:
         sent1 = get_random_brown_sentence()
