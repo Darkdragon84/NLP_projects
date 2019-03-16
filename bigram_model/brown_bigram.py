@@ -1,4 +1,5 @@
 import os
+import pickle
 import random
 import simplejson
 from argparse import ArgumentParser
@@ -6,7 +7,7 @@ from math import log
 from nltk.corpus import brown
 from collections import Counter
 
-from tools.dictionary import Dictionary, NONE_TOKEN_ID
+from tools.dictionary import Dictionary
 
 START = 'START_TOKEN'
 END = 'END_TOKEN'
@@ -23,8 +24,6 @@ def brown_sentence_iterator(dictionary=None, start_token=None, end_token=None):
             sent = expand_tokenized_sentence(sent, start_token, end_token)
             if dictionary is not None:
                 sent = [dictionary[word] for word in sent]
-                # if NONE_TOKEN_ID in sent:
-                #     print([dictionary.token_from_id(idx) for idx in sent])
             yield sent
 
 
@@ -78,8 +77,6 @@ class BrownNgramModel(object):
         self._end_token = end_token
 
         self._vocab = vocab
-        self._vocab_size = None
-        self._vocab_as_list = None
 
         self._corpus_size = None
         self._ngram_counters = None
@@ -90,6 +87,18 @@ class BrownNgramModel(object):
         for n in range(self._order):
             self._ngram_counters[n + 1] = Counter(brown_ngram_iterator(n + 1, self._vocab,
                                                                        self._start_token, self._end_token))
+
+    def save(self, filepath):
+        with open(filepath, "wb") as file:
+            pickle.dump(self, file)
+
+    @classmethod
+    def load(cls, filepath):
+        with open(filepath, "rb") as file:
+            model = pickle.load(file)
+        if not isinstance(model, cls):
+            raise RuntimeError("{} is not a {} instance".format(filepath, cls.__name__))
+        return model
 
     @property
     def order(self):
@@ -109,10 +118,8 @@ class BrownNgramModel(object):
     @property
     def corpus_size(self):
         if self._corpus_size is None:
-            total_count = 0
-            for token, count in self.unigram_counts.items():
-                if token not in {self._start_token, self._end_token}:
-                    total_count += count
+            total_count = sum(self.unigram_counts.values())
+            total_count -= self.unigram_counts.get(self._start_token, 0) + self.unigram_counts.get(self._end_token, 0)
             self._corpus_size = total_count
         return self._corpus_size
 
@@ -188,6 +195,7 @@ def main():
 
     smoothing = dict_config_params["smoothing"]
     dictionary_path = dict_config_params["dictionary path"]
+    model_path = dict_config_params["model path"]
     test_sentence = dict_config_params["test sentence"]
     max_vocab_size = dict_config_params["max vocab size"]
 
@@ -205,7 +213,14 @@ def main():
             dic = make_and_save_dictionary(dictionary_path, max_vocab_size)
 
     print("vocab size: {}".format(len(dic)))
-    model = BrownNgramModel(dic, 2, START, END)
+
+    if os.path.isfile(model_path):
+        model = BrownNgramModel.load(model_path)
+        print("loaded model {}".format(model_path))
+    else:
+        model = BrownNgramModel(dic, 2, START, END)
+        model.save(model_path)
+        print("created and saved model {}".format(model_path))
 
     logprob = model.sentence_log_prob(test_sentence, smoothing=smoothing)
     print("{}: {}".format(logprob, " ".join(test_sentence)))
