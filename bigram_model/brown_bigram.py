@@ -4,69 +4,15 @@ import random
 import simplejson
 from argparse import ArgumentParser
 from math import log
-from nltk.corpus import brown
 from collections import Counter
 
+from tools.corpus_readers import BrownCorpusReader
 from tools.dictionary import Dictionary
 
 START = 'START_TOKEN'
 END = 'END_TOKEN'
 
 TEST_SENTENCE = "They are trying to demonstrate some different ways of teaching and learning .".split()
-
-
-def brown_sentence_iterator(dictionary=None, start_token=None, end_token=None):
-
-    for doc_id in brown.fileids():
-        sentences = brown.sents(doc_id)
-        for sent in sentences:
-            sent = [word.lower() for word in sent]
-            sent = expand_tokenized_sentence(sent, start_token, end_token)
-            if dictionary is not None:
-                sent = [dictionary[word] for word in sent]
-            yield sent
-
-
-def brown_ngram_iterator(order, dictionary=None, start_token=None, end_token=None):
-    assert order > 0
-    sentence_iterator = make_sentence_iterator(order)
-    for sent in brown_sentence_iterator(dictionary, start_token, end_token):
-        for ngram in sentence_iterator(sent):
-            yield ngram
-
-
-def make_sentence_iterator(ngram_order):
-    if ngram_order == 1:
-        return sentence_word_iterator
-
-    def sent_it(sentence):
-        return sentence_ngram_iterator(sentence, ngram_order)
-    return sent_it
-
-
-def sentence_word_iterator(sentence):
-    for word in sentence:
-        yield word
-
-
-def sentence_ngram_iterator(sentence, order):
-    for idx in range(len(sentence) - (order - 1)):
-        yield tuple(sentence[idx:idx + order])
-
-
-def get_random_brown_sentence():
-    fid = random.sample(brown.fileids(), 1)[0]
-    sents = brown.sents(fid)
-    sid = random.sample(range(len(sents)), 1)[0]
-    return sents[sid]
-
-
-def expand_tokenized_sentence(tokens, start_token=None, end_token=None):
-    if start_token:
-        tokens = [start_token] + tokens
-    if end_token:
-        tokens = tokens + [end_token]
-    return tokens
 
 
 class BrownNgramModel(object):
@@ -77,6 +23,7 @@ class BrownNgramModel(object):
         self._end_token = end_token
 
         self._vocab = vocab
+        self._corpus_reader = BrownCorpusReader(vocab, start_token, end_token)
 
         self._corpus_size = None
         self._ngram_counters = None
@@ -85,8 +32,7 @@ class BrownNgramModel(object):
     def _count_ngrams(self):
         self._ngram_counters = dict()
         for n in range(self._order):
-            self._ngram_counters[n + 1] = Counter(brown_ngram_iterator(n + 1, self._vocab,
-                                                                       self._start_token, self._end_token))
+            self._ngram_counters[n + 1] = Counter(self._corpus_reader.ngram_iterator(n + 1))
 
     def save(self, filepath):
         with open(filepath, "wb") as file:
@@ -156,7 +102,7 @@ class BrownNgramModel(object):
         # especially if we are using a start token
         logprob = 0
         ct = 0
-        for bigram in sentence_ngram_iterator(sentence, 2):
+        for bigram in self._corpus_reader._sentence_ngram_iterator(sentence, 2):
             ct += 1
             # print(ct, bigram)
             prob = self.bigram_prob(bigram, smoothing)
