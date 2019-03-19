@@ -6,8 +6,8 @@ from argparse import ArgumentParser
 from math import log
 from collections import Counter
 
-from tools.corpus_readers import BrownCorpusReader
-from tools.dictionary import Dictionary
+from tools.corpus_readers import BrownCorpusReader, sentence_ngram_iterator, expand_tokenized_sentence
+from tools.dictionary import Dictionary, make_and_save_dictionary
 
 START = 'START_TOKEN'
 END = 'END_TOKEN'
@@ -17,13 +17,13 @@ TEST_SENTENCE = "They are trying to demonstrate some different ways of teaching 
 
 class BrownNgramModel(object):
 
-    def __init__(self, vocab, order=2, start_token=None, end_token=None):
+    def __init__(self, corpus_reader, order=2):
         self._order = order
-        self._start_token = start_token
-        self._end_token = end_token
+        self._corpus_reader = corpus_reader
 
-        self._vocab = vocab
-        self._corpus_reader = BrownCorpusReader(vocab, start_token, end_token)
+        self._vocab = corpus_reader.dictionary
+        self._start_token = corpus_reader.start_token
+        self._end_token = corpus_reader.end_token
 
         self._corpus_size = None
         self._ngram_counters = None
@@ -102,7 +102,7 @@ class BrownNgramModel(object):
         # especially if we are using a start token
         logprob = 0
         ct = 0
-        for bigram in self._corpus_reader._sentence_ngram_iterator(sentence, 2):
+        for bigram in sentence_ngram_iterator(sentence, 2):
             ct += 1
             # print(ct, bigram)
             prob = self.bigram_prob(bigram, smoothing)
@@ -118,14 +118,6 @@ class BrownNgramModel(object):
     def get_random_sentence_from_vocab(self, n_words):
         sentence = [random.choice(self._vocab.tokens) for _ in range(n_words)] + ['.']
         return sentence
-
-
-def make_and_save_dictionary(dictionary_path, max_vocab_size):
-    dic = Dictionary.from_corpus(brown_ngram_iterator(1, start_token=START, end_token=END),
-                                 max_vocab_size=max_vocab_size)
-    dic.save(dictionary_path)
-    print("created and saved Dictionary to {}".format(dictionary_path))
-    return dic
 
 
 def main():
@@ -145,26 +137,27 @@ def main():
     test_sentence = dict_config_params["test sentence"]
     max_vocab_size = dict_config_params["max vocab size"]
 
+    corpus_reader = BrownCorpusReader(start_token=START, end_token=END)
     if test_sentence is None:
         test_sentence = TEST_SENTENCE
 
     if not os.path.isfile(dictionary_path):
-        dic = make_and_save_dictionary(dictionary_path, max_vocab_size)
+        dictionary = make_and_save_dictionary(corpus_reader, dictionary_path, max_vocab_size)
     else:
-        dic = Dictionary.load(dictionary_path)
+        dictionary = Dictionary.load(dictionary_path)
         print("loaded Dictionary from {}".format(dictionary_path))
 
-        if max_vocab_size and len(dic) > max_vocab_size:
-            print("Dictionary size too large: {}, should be {} max".format(len(dic), max_vocab_size))
-            dic = make_and_save_dictionary(dictionary_path, max_vocab_size)
-
-    print("vocab size: {}".format(len(dic)))
+        if max_vocab_size and len(dictionary) > max_vocab_size:
+            print("Dictionary size too large: {}, should be {} max".format(len(dictionary), max_vocab_size))
+            dictionary = make_and_save_dictionary(corpus_reader, dictionary_path, max_vocab_size)
+    print("vocab size: {}".format(len(dictionary)))
+    corpus_reader.dictionary = dictionary
 
     if os.path.isfile(model_path):
         model = BrownNgramModel.load(model_path)
         print("loaded model {}".format(model_path))
     else:
-        model = BrownNgramModel(dic, 2, START, END)
+        model = BrownNgramModel(corpus_reader, 2)
         model.save(model_path)
         print("created and saved model {}".format(model_path))
 
@@ -172,7 +165,7 @@ def main():
     print("{}: {}".format(logprob, " ".join(test_sentence)))
 
     while True:
-        sent1 = get_random_brown_sentence()
+        sent1 = corpus_reader.get_random_sentence()
         sent2 = model.get_random_sentence_from_vocab(random.choice(range(5, 20)))
 
         logprob1 = model.sentence_log_prob(sent1, smoothing=smoothing)

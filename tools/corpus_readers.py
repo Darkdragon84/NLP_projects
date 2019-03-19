@@ -4,16 +4,30 @@ from abc import ABCMeta, abstractmethod
 from nltk.corpus import brown
 
 
+def sentence_ngram_iterator(sentence, order):
+    for idx in range(len(sentence) - (order - 1)):
+        yield tuple(sentence[idx:idx + order])
+
+
+def sentence_word_iterator(sentence):
+    for word in sentence:
+        yield word
+
+
+def expand_tokenized_sentence(sentence, start_token=None, end_token=None):
+    if start_token:
+        sentence = [start_token] + sentence
+    if end_token:
+        sentence.append(end_token)
+    return sentence
+
+
 class CorpusReaderInterface(object, metaclass=ABCMeta):
 
     def __init__(self, dictionary=None, start_token=None, end_token=None):
-        self._dictionary = dictionary
+        self.dictionary = dictionary
         self._start_token = start_token
         self._end_token = end_token
-
-    @property
-    def dictionary(self):
-        return self._dictionary
 
     @property
     def start_token(self):
@@ -29,28 +43,16 @@ class CorpusReaderInterface(object, metaclass=ABCMeta):
 
     def ngram_iterator(self, order):
         assert order > 0
-        sentence_iterator = self._make_sentence_iterator(order)
-        for sent in self.sentence_iterator():
-            for ngram in sentence_iterator(sent):
+
+        if order > 1:
+            def ngram_iterator(sent):
+                return sentence_ngram_iterator(sent, order)
+        else:
+            ngram_iterator = sentence_word_iterator
+
+        for sentence in self.sentence_iterator():
+            for ngram in ngram_iterator(sentence):
                 yield ngram
-
-    def _make_sentence_iterator(self, ngram_order):
-        if ngram_order == 1:
-            return self._sentence_word_iterator
-
-        def sent_it(sentence):
-            return self._sentence_ngram_iterator(sentence, ngram_order)
-        return sent_it
-
-    @staticmethod
-    def _sentence_word_iterator(sentence):
-        for word in sentence:
-            yield word
-
-    @staticmethod
-    def _sentence_ngram_iterator(sentence, order):
-        for idx in range(len(sentence) - (order - 1)):
-            yield tuple(sentence[idx:idx + order])
 
     @staticmethod
     @abstractmethod
@@ -65,12 +67,9 @@ class BrownCorpusReader(CorpusReaderInterface):
             sentences = brown.sents(doc_id)
             for sent in sentences:
                 sent = [word.lower() for word in sent]
-                if self._start_token:
-                    sent = [self._start_token] + sent
-                if self._end_token:
-                    sent.append(self._end_token)
-                if self._dictionary is not None:
-                    sent = [self._dictionary[word] for word in sent]
+                sent = expand_tokenized_sentence(sent, self._start_token, self._end_token)
+                if self.dictionary is not None:
+                    sent = [self.dictionary[word] for word in sent]
                 yield sent
 
     @staticmethod

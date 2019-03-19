@@ -3,6 +3,8 @@ from collections import Counter
 from operator import itemgetter
 from typing import Iterable
 
+from tools.corpus_readers import CorpusReaderInterface
+
 NONE_TOKEN = "NONE"
 NONE_TOKEN_ID = -1
 
@@ -93,3 +95,11 @@ class Dictionary(object):
         dictionary = cls.from_tokens(tokens)
         return dictionary
 
+
+def make_and_save_dictionary(corpus_reader, dictionary_path, max_vocab_size):
+    assert isinstance(corpus_reader, CorpusReaderInterface)
+
+    dictionary = Dictionary.from_corpus(corpus_reader.ngram_iterator(1), max_vocab_size=max_vocab_size)
+    dictionary.save(dictionary_path)
+    print("created and saved Dictionary to {}".format(dictionary_path))
+    return dictionary
