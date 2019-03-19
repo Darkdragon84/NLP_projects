@@ -1,6 +1,10 @@
 {
   "dictionary path": "path/to/dictionary",
   "model path": "path/to/model",
+
+  "start token": null,
+  "end token": null,
+
   "smoothing": 0.1,
   "max vocab size": null,
   "test sentence": null

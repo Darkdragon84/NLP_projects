@@ -3,8 +3,6 @@ from collections import Counter
 from operator import itemgetter
 from typing import Iterable
 
-from tools.corpus_readers import CorpusReaderInterface
-
 NONE_TOKEN = "NONE"
 NONE_TOKEN_ID = -1
 
@@ -50,8 +48,8 @@ class Dictionary(object):
         return NONE_TOKEN if token_id == NONE_TOKEN_ID or token_id >= len(self) else self._tokens[token_id]
 
     def add_tokens(self, tokens):
-        if not isinstance(tokens, Iterable):
-            raise ValueError("tokens must be either a list or set of items")
+        if not isinstance(tokens, (list, tuple, set)):
+            tokens = [tokens]
 
         new_id = len(self._tokens)
 
@@ -97,7 +95,6 @@ class Dictionary(object):
 
 
 def make_and_save_dictionary(corpus_reader, dictionary_path, max_vocab_size):
-    assert isinstance(corpus_reader, CorpusReaderInterface)
 
     dictionary = Dictionary.from_corpus(corpus_reader.ngram_iterator(1), max_vocab_size=max_vocab_size)
     dictionary.save(dictionary_path)

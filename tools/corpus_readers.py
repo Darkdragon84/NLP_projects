@@ -26,16 +26,8 @@ class CorpusReaderInterface(object, metaclass=ABCMeta):
 
     def __init__(self, dictionary=None, start_token=None, end_token=None):
         self.dictionary = dictionary
-        self._start_token = start_token
-        self._end_token = end_token
-
-    @property
-    def start_token(self):
-        return self._start_token
-
-    @property
-    def end_token(self):
-        return self._end_token
+        self.start_token = start_token
+        self.end_token = end_token
 
     @abstractmethod
     def sentence_iterator(self):
@@ -67,9 +59,11 @@ class BrownCorpusReader(CorpusReaderInterface):
             sentences = brown.sents(doc_id)
             for sent in sentences:
                 sent = [word.lower() for word in sent]
-                sent = expand_tokenized_sentence(sent, self._start_token, self._end_token)
+                sent = expand_tokenized_sentence(sent, self.start_token, self.end_token)
                 if self.dictionary is not None:
                     sent = [self.dictionary[word] for word in sent]
+                # if NONE_TOKEN_ID in sent:
+                #     print(sent)
                 yield sent
 
     @staticmethod

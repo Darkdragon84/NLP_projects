@@ -1,6 +1,8 @@
 import os
 import pickle
 import random
+import warnings
+
 import simplejson
 from argparse import ArgumentParser
 from math import log
@@ -56,6 +58,14 @@ class BrownNgramModel(object):
 
     def get_ngram_counts(self, order):
         return self._ngram_counters[order]
+
+    @property
+    def start_token(self):
+        return self._start_token
+
+    @property
+    def end_token(self):
+        return self._end_token
 
     @property
     def vocab(self):
@@ -137,26 +147,43 @@ def main():
     test_sentence = dict_config_params["test sentence"]
     max_vocab_size = dict_config_params["max vocab size"]
 
-    corpus_reader = BrownCorpusReader(start_token=START, end_token=END)
+    start_token = dict_config_params["start token"] or START
+    end_token = dict_config_params["end token"] or END
+
+    model = None
+    dictionary = None
+
     if test_sentence is None:
         test_sentence = TEST_SENTENCE
 
-    if not os.path.isfile(dictionary_path):
-        dictionary = make_and_save_dictionary(corpus_reader, dictionary_path, max_vocab_size)
-    else:
-        dictionary = Dictionary.load(dictionary_path)
-        print("loaded Dictionary from {}".format(dictionary_path))
-
-        if max_vocab_size and len(dictionary) > max_vocab_size:
-            print("Dictionary size too large: {}, should be {} max".format(len(dictionary), max_vocab_size))
-            dictionary = make_and_save_dictionary(corpus_reader, dictionary_path, max_vocab_size)
-    print("vocab size: {}".format(len(dictionary)))
-    corpus_reader.dictionary = dictionary
-
     if os.path.isfile(model_path):
         model = BrownNgramModel.load(model_path)
+        dictionary = model.vocab
+        start_token = model.start_token
+        end_token = model.end_token
         print("loaded model {}".format(model_path))
-    else:
+
+    corpus_reader = BrownCorpusReader(dictionary=dictionary, start_token=start_token, end_token=end_token)
+
+    if model is None:
+        if not os.path.isfile(dictionary_path):
+            dictionary = make_and_save_dictionary(corpus_reader, dictionary_path, max_vocab_size)
+        else:
+            dictionary = Dictionary.load(dictionary_path)
+            print("loaded Dictionary from {}".format(dictionary_path))
+
+            if max_vocab_size and len(dictionary) > max_vocab_size:
+                print("Dictionary size too large: {}, should be {} max".format(len(dictionary), max_vocab_size))
+                dictionary = make_and_save_dictionary(corpus_reader, dictionary_path, max_vocab_size)
+
+            for token in [start_token, end_token]:
+                if token not in dictionary:
+                    warnings.warn("{} not in dictionary, adding".format(token))
+                    dictionary.add_tokens(token)
+
+        print("vocab size: {}".format(len(dictionary)))
+        corpus_reader.dictionary = dictionary
+
         model = BrownNgramModel(corpus_reader, 2)
         model.save(model_path)
         print("created and saved model {}".format(model_path))
