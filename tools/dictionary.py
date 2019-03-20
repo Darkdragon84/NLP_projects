@@ -4,13 +4,13 @@ from operator import itemgetter
 from typing import Iterable
 
 NONE_TOKEN = "NONE"
-NONE_TOKEN_ID = -1
+NONE_TOKEN_ID = 0
 
 
 class Dictionary(object):
     def __init__(self):
-        self._tokens = list()
-        self._token_to_id = dict()
+        self._tokens = [NONE_TOKEN]
+        self._token_to_id = {NONE_TOKEN: NONE_TOKEN_ID}
 
     def __contains__(self, item):
         if isinstance(item, str):
