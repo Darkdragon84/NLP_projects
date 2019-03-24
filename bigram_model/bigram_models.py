@@ -1,46 +1,26 @@
 import pickle
 import random
+
+import numpy
+
+from abc import ABCMeta, abstractmethod
 from collections.__init__ import Counter
 from math import log
 
 from tools.corpus_readers import expand_tokenized_sentence, sentence_ngram_iterator
+from tools.math_utilities import softmax
 
 
-class NeuralNgramModel(object):
+class NgramModelInterface(object, metaclass=ABCMeta):
     def __init__(self, corpus_reader, order=2):
         self._order = order
         self._corpus_reader = corpus_reader
-
-        self._vocab = corpus_reader.dictionary
-        self._start_token = corpus_reader.start_token
-        self._end_token = corpus_reader.end_token
-
-    def train(self, learning_rate=0.01):
-        ngram_ids = [ids for ids in self._corpus_reader.ngram_iterator(2)]
-        X_ids, Y_ids = zip(*ngram_ids)
-
-        print("done")
-
-
-class MarkovNgramModel(object):
-
-    def __init__(self, corpus_reader, order=2, smoothing=0.01):
-        self._order = order
-        self._corpus_reader = corpus_reader
-
-        self._vocab = corpus_reader.dictionary
-        self._start_token = corpus_reader.start_token
-        self._end_token = corpus_reader.end_token
-
         self._corpus_size = None
-        self._ngram_counters = None
-        self.smoothing = smoothing
-        self._count_ngrams()
 
-    def _count_ngrams(self):
-        self._ngram_counters = dict()
-        for n in range(self._order):
-            self._ngram_counters[n + 1] = Counter(self._corpus_reader.ngram_iterator(n + 1))
+        self._vocab = corpus_reader.dictionary
+        self._start_token = corpus_reader.start_token
+        self._end_token = corpus_reader.end_token
+
 
     def save(self, filepath):
         with open(filepath, "wb") as file:
@@ -59,13 +39,6 @@ class MarkovNgramModel(object):
         return self._order
 
     @property
-    def unigram_counts(self):
-        return self.get_ngram_counts(1)
-
-    def get_ngram_counts(self, order):
-        return self._ngram_counters[order]
-
-    @property
     def start_token(self):
         return self._start_token
 
@@ -77,6 +50,81 @@ class MarkovNgramModel(object):
     def vocab(self):
         return self._vocab
 
+    @abstractmethod
+    def sentence_log_prob(self, sentence):
+        raise NotImplementedError("subclasses must override this method")
+
+
+class NeuralNgramModel(NgramModelInterface):
+
+    def __init__(self, corpus_reader, order=2):
+        super().__init__(corpus_reader, order)
+        self._weights = None
+
+    def train(self, learning_rate, batch_size, epochs):
+
+        X_ids, Y_ids = zip(*self._corpus_reader.ngram_iterator(2))
+        X_ids = numpy.array(X_ids)
+        Y_ids = numpy.array(Y_ids)
+
+        V = len(self._vocab)
+        N = len(X_ids)
+
+        print(N)
+        print(V)
+
+        self._weights = numpy.random.randn(V, V) / V**2
+
+        # initial cost function evaluation
+        # Y_pred = softmax(self._weights[X_ids])
+        # log_probs = - numpy.log(numpy.array([Y_pred[i, Y_ids[i]] for i in range(N)]))
+        # J = log_probs.sum() / N
+        # print(J)
+
+        for epoch in range(epochs):
+            sample_inds = numpy.arange(0, N)
+            numpy.random.shuffle(sample_inds)
+
+            batches = [sample_inds[ind:ind + batch_size] for ind in range(0, N, batch_size)]
+            J = 0
+            for batch in batches:
+
+                X = numpy.array(X_ids[batch])
+                Y = numpy.array(Y_ids[batch])
+
+                # forward pass
+                Z = self._weights[X]
+                Y_pred = softmax(Z)
+
+                log_probs = - numpy.log(numpy.array([Y_pred[i, Y[i]] for i in range(len(batch))]))
+                J += log_probs.sum()/N
+                print(J)
+
+
+            # print(len(batches))
+            # print([len(batch) for batch in batches])
+
+    def _forward_pass(self, X_ids):
+        Z = self._weights[X_ids]
+
+    def sentence_log_prob(self, sentence):
+        return 1
+
+
+class MarkovNgramModel(NgramModelInterface):
+
+    def __init__(self, corpus_reader, order=2, smoothing=0.01):
+        super().__init__(corpus_reader, order)
+
+        self._ngram_counters = None
+        self.smoothing = smoothing
+        self._count_ngrams()
+
+    def _count_ngrams(self):
+        self._ngram_counters = dict()
+        for n in range(self._order):
+            self._ngram_counters[n + 1] = Counter(self._corpus_reader.ngram_iterator(n + 1))
+
     @property
     def corpus_size(self):
         if self._corpus_size is None:
@@ -84,6 +132,13 @@ class MarkovNgramModel(object):
             total_count -= self.unigram_counts.get(self._start_token, 0) + self.unigram_counts.get(self._end_token, 0)
             self._corpus_size = total_count
         return self._corpus_size
+
+    @property
+    def unigram_counts(self):
+        return self.get_ngram_counts(1)
+
+    def get_ngram_counts(self, order):
+        return self._ngram_counters[order]
 
     def word_prob(self, word):
         assert isinstance(word, str)

@@ -49,7 +49,7 @@ def main():
     if test_sentence is None:
         test_sentence = TEST_SENTENCE
 
-    if os.path.isfile(model_path):
+    if model_path and os.path.isfile(model_path):
         model = MarkovNgramModel.load(model_path)
         model_class = model.__class__
 
@@ -91,11 +91,13 @@ def main():
 
             learning_rate = model_parameters['learning rate']
             batch_size = model_parameters['batch size']
+            epochs = model_parameters['number of epochs']
             model = NeuralNgramModel(corpus_reader, 2)
-            model.train(learning_rate)
+            model.train(learning_rate, batch_size, epochs)
 
-        model.save(model_path)
-        print("created and saved model {}".format(model_path))
+        if model_path:
+            model.save(model_path)
+            print("created and saved model {}".format(model_path))
 
     logprob = model.sentence_log_prob(test_sentence)
     print("{}: {}".format(logprob, " ".join(test_sentence)))
