@@ -112,7 +112,7 @@ def main():
         print("{}: {}".format(logprob1, " ".join(sent1)))
         print("{}: {}".format(logprob2, " ".join(sent2)))
 
-        choice = input("continue [Y/n]:")
+        choice = input("continue [Y/n]: ")
         if choice == 'n':
             break
 

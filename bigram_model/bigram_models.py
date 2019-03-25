@@ -1,11 +1,12 @@
 import pickle
-import random
 
 import numpy
 
 from abc import ABCMeta, abstractmethod
-from collections.__init__ import Counter
+from collections.__init__ import Counter, defaultdict
 from math import log
+
+from numpy import mean
 
 from tools.corpus_readers import expand_tokenized_sentence, sentence_ngram_iterator
 from tools.math_utilities import softmax
@@ -20,7 +21,6 @@ class NgramModelInterface(object, metaclass=ABCMeta):
         self._vocab = corpus_reader.dictionary
         self._start_token = corpus_reader.start_token
         self._end_token = corpus_reader.end_token
-
 
     def save(self, filepath):
         with open(filepath, "wb") as file:
@@ -67,6 +67,10 @@ class NeuralNgramModel(NgramModelInterface):
         X_ids = numpy.array(X_ids)
         Y_ids = numpy.array(Y_ids)
 
+        X_ids_T = defaultdict(list)
+        for i, x in enumerate(X_ids):
+            X_ids_T[x].append(i)
+
         V = len(self._vocab)
         N = len(X_ids)
 
@@ -82,12 +86,18 @@ class NeuralNgramModel(NgramModelInterface):
         # print(J)
 
         for epoch in range(epochs):
+            print(80 * "=")
+            print("epoch {}/{}".format(epoch, epochs))
+            print()
+
             sample_inds = numpy.arange(0, N)
             numpy.random.shuffle(sample_inds)
 
             batches = [sample_inds[ind:ind + batch_size] for ind in range(0, N, batch_size)]
-            J = 0
-            for batch in batches:
+            num_batches = len(batches)
+            for n_b, batch in enumerate(batches):
+
+                curr_batch_size = len(batch)
 
                 X = numpy.array(X_ids[batch])
                 Y = numpy.array(Y_ids[batch])
@@ -96,9 +106,13 @@ class NeuralNgramModel(NgramModelInterface):
                 Z = self._weights[X]
                 Y_pred = softmax(Z)
 
-                log_probs = - numpy.log(numpy.array([Y_pred[i, Y[i]] for i in range(len(batch))]))
-                J += log_probs.sum()/N
-                print(J)
+                log_probs = - numpy.log(numpy.array([Y_pred[i, j_i] for i, j_i in enumerate(Y)]))
+                J = mean(log_probs)
+                print("batch {}/{}, J={}".format(n_b, num_batches, J))
+
+                for i, j_i in enumerate(Y):
+                    # Y_pred <- Y_pred - Y
+                    Y_pred[i, j_i] -= 1
 
 
             # print(len(batches))
