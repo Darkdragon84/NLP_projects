@@ -2,6 +2,8 @@ import pickle
 
 import numpy
 
+from scipy.sparse import csr_matrix
+
 from abc import ABCMeta, abstractmethod
 from collections.__init__ import Counter, defaultdict
 from math import log
@@ -60,16 +62,17 @@ class NeuralNgramModel(NgramModelInterface):
     def __init__(self, corpus_reader, order=2):
         super().__init__(corpus_reader, order)
         self._weights = None
+        self._bias = None
 
     def train(self, learning_rate, batch_size, epochs):
 
         X_ids, Y_ids = zip(*self._corpus_reader.ngram_iterator(2))
-        X_ids = numpy.array(X_ids)
-        Y_ids = numpy.array(Y_ids)
+        # X_ids = numpy.array(X_ids)
+        # Y_ids = numpy.array(Y_ids)
 
-        X_ids_T = defaultdict(list)
-        for i, x in enumerate(X_ids):
-            X_ids_T[x].append(i)
+        # X_ids_T = defaultdict(list)
+        # for i, x in enumerate(X_ids):
+        #     X_ids_T[x].append(i)
 
         V = len(self._vocab)
         N = len(X_ids)
@@ -77,7 +80,12 @@ class NeuralNgramModel(NgramModelInterface):
         print(N)
         print(V)
 
-        self._weights = numpy.random.randn(V, V) / V**2
+        self._weights = numpy.random.randn(V + 1, V) / (V*(V+1))  # last column is bias
+
+        X = csr_matrix(([1.]*2*N), (list(range(N))*2, X_ids + [V]*N))
+
+        # self._weights = numpy.random.randn(V, V) / V**2
+        # self._bias = numpy.random.randn(V) / V
 
         # initial cost function evaluation
         # Y_pred = softmax(self._weights[X_ids])
@@ -102,17 +110,17 @@ class NeuralNgramModel(NgramModelInterface):
                 X = numpy.array(X_ids[batch])
                 Y = numpy.array(Y_ids[batch])
 
-                # forward pass
-                Z = self._weights[X]
+                # forward pass Z = X*W + b
+                Z = self._weights[X] + self._bias
                 Y_pred = softmax(Z)
 
                 log_probs = - numpy.log(numpy.array([Y_pred[i, j_i] for i, j_i in enumerate(Y)]))
                 J = mean(log_probs)
                 print("batch {}/{}, J={}".format(n_b, num_batches, J))
 
-                for i, j_i in enumerate(Y):
-                    # Y_pred <- Y_pred - Y
-                    Y_pred[i, j_i] -= 1
+                # for i, j_i in enumerate(Y):
+                #     # Y_pred <- Y_pred - Y
+                #     Y_pred[i, j_i] -= 1
 
 
             # print(len(batches))
