@@ -66,32 +66,21 @@ class NeuralNgramModel(NgramModelInterface):
 
     def train(self, learning_rate, batch_size, epochs):
 
-        X_ids, Y_ids = zip(*self._corpus_reader.ngram_iterator(2))
-        # X_ids = numpy.array(X_ids)
-        # Y_ids = numpy.array(Y_ids)
+        x_ids, y_ids = zip(*self._corpus_reader.ngram_iterator(2))
+        x_ids = numpy.array(x_ids)
+        y_ids = numpy.array(y_ids)
 
-        # X_ids_T = defaultdict(list)
-        # for i, x in enumerate(X_ids):
-        #     X_ids_T[x].append(i)
+        x_ids_t = defaultdict(list)
+        for i, x in enumerate(x_ids):
+            x_ids_t[x].append(i)
 
         V = len(self._vocab)
-        N = len(X_ids)
+        N = len(x_ids)
 
         print(N)
         print(V)
 
         self._weights = numpy.random.randn(V + 1, V) / (V*(V+1))  # last column is bias
-
-        X = csr_matrix(([1.]*2*N), (list(range(N))*2, X_ids + [V]*N))
-
-        # self._weights = numpy.random.randn(V, V) / V**2
-        # self._bias = numpy.random.randn(V) / V
-
-        # initial cost function evaluation
-        # Y_pred = softmax(self._weights[X_ids])
-        # log_probs = - numpy.log(numpy.array([Y_pred[i, Y_ids[i]] for i in range(N)]))
-        # J = log_probs.sum() / N
-        # print(J)
 
         for epoch in range(epochs):
             print(80 * "=")
@@ -107,24 +96,26 @@ class NeuralNgramModel(NgramModelInterface):
 
                 curr_batch_size = len(batch)
 
-                X = numpy.array(X_ids[batch])
-                Y = numpy.array(Y_ids[batch])
+                x_ids_batch = numpy.array(x_ids[batch])
+                y = numpy.array(y_ids[batch])
 
                 # forward pass Z = X*W + b
-                Z = self._weights[X] + self._bias
-                Y_pred = softmax(Z)
+                # self._weights[-1] is bias b and gets broadcasted over all samples
+                z = self._weights[x_ids_batch] + self._weights[-1]
+                y_pred = softmax(z)
 
-                log_probs = - numpy.log(numpy.array([Y_pred[i, j_i] for i, j_i in enumerate(Y)]))
-                J = mean(log_probs)
-                print("batch {}/{}, J={}".format(n_b, num_batches, J))
+                log_probs = - numpy.log(numpy.array([y_pred[i, j_i] for i, j_i in enumerate(y)]))
+                loss = mean(log_probs)
+                print("batch {}/{}, loss={}".format(n_b, num_batches, loss))
 
-                # for i, j_i in enumerate(Y):
-                #     # Y_pred <- Y_pred - Y
-                #     Y_pred[i, j_i] -= 1
+                for i, j_i in enumerate(y):
+                    # y_pred <- y_pred - Y
+                    y_pred[i, j_i] -= 1
 
 
             # print(len(batches))
             # print([len(batch) for batch in batches])
+
 
     def _forward_pass(self, X_ids):
         Z = self._weights[X_ids]

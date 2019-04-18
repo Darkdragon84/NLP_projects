@@ -10,14 +10,14 @@
 
   "model type": "markov",
 
-  "markov ngram parameters":
-  {
-    "smoothing": 0.001
-  },
-  "neural ngram parameters":
-  {
-    "learning rate": 0.01,
-    "number of epochs": 10,
-    "batch size": 100
+  "parameters": {
+    "markov": {
+      "smoothing": 0.001
+    },
+    "neural": {
+      "learning rate": 0.01,
+      "number of epochs": 10,
+      "batch size": 100
+    }
   }
 }

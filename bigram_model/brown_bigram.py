@@ -82,12 +82,12 @@ def main():
         corpus_reader.dictionary = dictionary
 
         if model_class == MarkovNgramModel:
-            model_parameters = dict_config_params["markov ngram parameters"]
+            model_parameters = dict_config_params["parameters"]["markov"]
 
             smoothing = model_parameters['smoothing']
             model = MarkovNgramModel(corpus_reader, 2, smoothing=smoothing)
         elif model_class == NeuralNgramModel:
-            model_parameters = dict_config_params["neural ngram parameters"]
+            model_parameters = dict_config_params["parameters"]["neural"]
 
             learning_rate = model_parameters['learning rate']
             batch_size = model_parameters['batch size']

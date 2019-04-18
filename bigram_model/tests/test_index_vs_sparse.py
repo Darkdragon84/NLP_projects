@@ -1,4 +1,5 @@
 import time
+from collections import defaultdict
 
 import numpy
 from scipy.sparse import csr_matrix
@@ -7,12 +8,20 @@ import timeit
 
 def index_ops(xinds, yinds, binds, W):
 
+    N = len(xinds)
+    F, C = W.shape
+    F -= 1
+
     # xinds = numpy.asarray(xinds)
     # yinds = numpy.asarray(yinds)
+    # xinds_t = [[] for _ in range(C)]
+    # for i, f in enumerate(xinds):
+    #     xinds_t[f].append(i)
 
     ts = time.time()
 
     xinds_curr = xinds[binds]
+    # xinds_t_curr = xinds_t[binds]
     yinds_curr = yinds[binds]
 
     Y_pred = W[xinds_curr] + W[-1]
@@ -22,10 +31,15 @@ def index_ops(xinds, yinds, binds, W):
         # Y_pred <- Y_pred - Y
         Y_pred[i, j_i] -= 1
 
+    grad = numpy.zeros_like(W)
+
+    for i, f in enumerate(xinds_curr):
+        grad[f, :] += Y_pred[i]
+
     te = time.time() - ts
     print("index", te)
 
-    return Y_pred, probs
+    return Y_pred, probs, grad
 
 
 def sparse_ops(xinds, yinds, binds, W):
@@ -65,25 +79,26 @@ def sparse_ops(xinds, yinds, binds, W):
         # Y_pred <- Y_pred - Y
         Y_pred[i, j_i] -= 1
 
+    grad = XS.T.dot(Y_pred)
     # Ydiff = Y_pred - YS
     # Ydiff = YS._rsub_dense(Y_pred)
 
     te = time.time() - ts
     print("sparse", te)
 
-    return Y_pred, probs
+    return Y_pred, probs, grad
     # return Ydiff, probs
 
 
 def main():
-    N = 100000
-    F = 10000
-    C = 10000
-    bs = 1000
-    # N = 10000
-    # F = 1000
-    # C = 1000
-    # bs = 100
+    # N = 100000
+    # F = 10000
+    # C = 10000
+    # bs = 1000
+    N = 10000
+    F = 10
+    C = 10
+    bs = 100
     W = numpy.random.randn(F + 1, C) / ((F + 1) * C)
 
     xinds = numpy.random.randint(0, F, N)
@@ -100,12 +115,13 @@ def main():
     numpy.random.shuffle(sinds)
     binds = sinds[:bs]
 
-    yp1, p1 = index_ops(xinds, yinds, binds, W)
+    yp1, p1, grad1 = index_ops(xinds, yinds, binds, W)
     # yp2, p2 = sparse_ops(XS, YS, binds, W)
-    yp2, p2 = sparse_ops(xinds, yinds, binds, W)
+    yp2, p2, grad2 = sparse_ops(xinds, yinds, binds, W)
     #
     print("ypred", numpy.linalg.norm(yp1 - yp2))
     print("probs", numpy.linalg.norm(p1 - p2))
+    print("grad", numpy.linalg.norm(grad1 - grad2))
 
 
 if __name__ == '__main__':
