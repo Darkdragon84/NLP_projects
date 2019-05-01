@@ -6,6 +6,41 @@ from scipy.sparse import csr_matrix
 import timeit
 
 
+def full_ops(xinds, yinds, binds, W):
+    N = len(xinds)
+    F, C = W.shape
+    F -= 1
+
+    Nb = len(binds)
+
+    ts = time.time()
+    xinds_curr = xinds[binds]
+    yinds_curr = yinds[binds]
+
+    X = numpy.zeros((Nb, F + 1))
+    # X = numpy.zeros((Nb, F))
+    Y = numpy.zeros((Nb, C))
+
+    for i, (jx, jy) in enumerate(zip(xinds_curr, yinds_curr)):
+        X[i, jx] = 1
+        X[i, -1] = 1
+        Y[i, jy] = 1
+
+    # Y_pred = X.dot(W[:-1]) + W[-1]
+    Y_pred = X.dot(W)
+    probs = numpy.diag(Y_pred.dot(Y.T))
+
+    Y_pred -= Y
+
+    grad = X.T.dot(Y_pred)
+
+    te = time.time() - ts
+    print("full", te)
+
+    # return Y_pred, probs
+    return Y_pred, probs, grad
+
+
 def index_ops(xinds, yinds, binds, W):
 
     N = len(xinds)
@@ -34,11 +69,14 @@ def index_ops(xinds, yinds, binds, W):
     grad = numpy.zeros_like(W)
 
     for i, f in enumerate(xinds_curr):
-        grad[f, :] += Y_pred[i]
+        grad[f] += Y_pred[i]
+
+    grad[-1] = Y_pred.sum(axis=0)
 
     te = time.time() - ts
     print("index", te)
 
+    # return Y_pred, probs
     return Y_pred, probs, grad
 
 
@@ -86,19 +124,20 @@ def sparse_ops(xinds, yinds, binds, W):
     te = time.time() - ts
     print("sparse", te)
 
+    # return Y_pred, probs
     return Y_pred, probs, grad
     # return Ydiff, probs
 
 
 def main():
-    # N = 100000
-    # F = 10000
-    # C = 10000
-    # bs = 1000
-    N = 10000
-    F = 10
-    C = 10
-    bs = 100
+    N = 100000
+    F = 10000
+    C = 10000
+    bs = 1000
+    # N = 10000
+    # F = 10
+    # C = 10
+    # bs = 100
     W = numpy.random.randn(F + 1, C) / ((F + 1) * C)
 
     xinds = numpy.random.randint(0, F, N)
@@ -115,13 +154,26 @@ def main():
     numpy.random.shuffle(sinds)
     binds = sinds[:bs]
 
+    # yp1, p1 = index_ops(xinds, yinds, binds, W)
+    # # yp2, p2 = sparse_ops(XS, YS, binds, W)
+    # yp2, p2 = sparse_ops(xinds, yinds, binds, W)
+    # yp3, p3 = full_ops(xinds, yinds, binds, W)
+
     yp1, p1, grad1 = index_ops(xinds, yinds, binds, W)
     # yp2, p2 = sparse_ops(XS, YS, binds, W)
     yp2, p2, grad2 = sparse_ops(xinds, yinds, binds, W)
-    #
-    print("ypred", numpy.linalg.norm(yp1 - yp2))
-    print("probs", numpy.linalg.norm(p1 - p2))
-    print("grad", numpy.linalg.norm(grad1 - grad2))
+    yp3, p3, grad3 = full_ops(xinds, yinds, binds, W)
+
+    print()
+    print("ypred: 1-2: {:6.3e}, 1-3: {:6.3e}, 2-3: {:6.3e}".format(numpy.linalg.norm(yp1 - yp2),
+                                                                   numpy.linalg.norm(yp1 - yp3),
+                                                                   numpy.linalg.norm(yp2 - yp3)))
+    print("probs: 1-2: {:6.3e}, 1-3: {:6.3e}, 2-3: {:6.3e}".format(numpy.linalg.norm(p1 - p2),
+                                                                   numpy.linalg.norm(p1 - p3),
+                                                                   numpy.linalg.norm(p2 - p3)))
+    print("grad: 1-2: {:6.3e}, 1-3: {:6.3e}, 2-3: {:6.3e}".format(numpy.linalg.norm(grad1 - grad2),
+                                                                  numpy.linalg.norm(grad1 - grad3),
+                                                                  numpy.linalg.norm(grad2 - grad3)))
 
 
 if __name__ == '__main__':
